@@ -9,7 +9,7 @@ from typing import List, Optional
 import uvicorn
 from sqlalchemy.orm import Session
 
-from .collector_actuator import SimulatorCollector
+from .collector_actuator import ActuatorCollector   # ← MODIFICATION
 from .models.matrix_factory import MatrixFactory
 from .storage import StorageManager
 from .database import get_db, init_db
@@ -30,7 +30,7 @@ app = FastAPI(
 )
 
 # --- Initialisation des composants ---
-collector = SimulatorCollector()
+collector = ActuatorCollector()   # ← MODIFICATION
 factory = MatrixFactory()
 storage = StorageManager()
 
@@ -109,7 +109,7 @@ async def collect(request: CollectRequest, db: Session = Depends(get_db)):
             base_port=request.base_port
         )
 
-        # 3. Sauvegarder les matrices sur le disque (MinIO ou fichier)
+        # 3. Sauvegarder les matrices sur le disque
         factory.save_to_file(matrix, job_id)
 
         # 4. Enregistrer les métadonnées des services en base
@@ -249,7 +249,7 @@ async def delete_collection(job_id: str, db: Session = Depends(get_db)):
 
 # --- Frontend (optionnel) ---
 try:
-    app.mount("/static", StaticFiles(directory="../frontend"), name="static")
+    app.mount("/static", StaticFiles(directory="../frontend/static"), name="static")   # ← MODIFICATION
     
     @app.get("/")
     async def serve_frontend():
