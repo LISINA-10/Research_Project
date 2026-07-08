@@ -1,0 +1,156 @@
+/* Ajout des styles pour les paramètres */
+
+.param-section {
+    background: #f8f9fa;
+    padding: 15px 20px;
+    border-radius: 8px;
+    margin-bottom: 25px;
+    border: 1px solid #e9ecef;
+}
+
+.param-section h3 {
+    margin-top: 0;
+    margin-bottom: 12px;
+    font-size: 16px;
+    color: #2c3e50;
+}
+
+.param-row {
+    display: flex;
+    gap: 25px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.param-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.param-group label {
+    font-weight: 500;
+    font-size: 14px;
+    color: #495057;
+}
+
+.param-group input {
+    width: 80px;
+    padding: 6px 10px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+.service-section {
+    margin-bottom: 20px;
+}
+
+.service-section h3 {
+    font-size: 16px;
+    color: #2c3e50;
+    margin-bottom: 10px;
+}
+
+.header-row {
+    font-weight: 600;
+    color: #495057;
+    background: #e9ecef;
+    padding: 8px 12px;
+    border-radius: 6px;
+    display: flex;
+    gap: 10px;
+}
+
+.header-row span {
+    flex: 1 1 150px;
+    min-width: 120px;
+}
+
+.service-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.service-row input {
+    padding: 8px 12px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 14px;
+    flex: 1 1 150px;
+    min-width: 120px;
+}
+
+.service-row input:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 3px rgba(52,152,219,0.2);
+}
+
+.actions {
+    margin: 20px 0;
+}
+
+.btn {
+    padding: 10px 24px;
+    border: none;
+    border-radius: 6px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background 0.2s;
+    font-weight: 600;
+}
+
+.btn-primary {
+    background: #3498db;
+    color: white;
+}
+.btn-primary:hover {
+    background: #2980b9;
+}
+
+.btn-secondary {
+    background: #ecf0f1;
+    color: #2c3e50;
+}
+.btn-secondary:hover {
+    background: #d5dbdb;
+}
+
+#resultats {
+    margin-top: 15px;
+    padding: 15px;
+    border-radius: 8px;
+    background: #f8f9fa;
+    border-left: 4px solid #2ecc71;
+    display: none;
+}
+
+#resultats.show {
+    display: block;
+}
+
+#resultats.error {
+    border-left-color: #e74c3c;
+}
+
+#logs {
+    margin-top: 15px;
+    padding: 12px;
+    background: #1e1e1e;
+    color: #d4d4d4;
+    border-radius: 6px;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    white-space: pre-wrap;
+    max-height: 250px;
+    overflow-y: auto;
+    display: none;
+}
+
+#logs.show {
+    display: block;
+}

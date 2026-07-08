@@ -1,0 +1,15 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.npy
+*.csv
+data/raw/
+data/processed/
+data/optimized/
+data/deployments/
+data/reports/
+.idea/
+.vscode/
+*.log
+*.pid

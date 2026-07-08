@@ -1,0 +1,16 @@
+{
+    "ressources": {
+        "cpu_cores": 0,
+        "ram_gb": 0,
+        "duree_collecte": 0,
+        "interval_collecte": 0
+    },
+    "services": [
+        {
+            "nom": "",
+            "url_cpu": "",
+            "url_ram": "",
+            "transactions": 0
+        }
+    ]
+}

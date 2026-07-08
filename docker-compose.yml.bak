@@ -1,0 +1,235 @@
+version: '3.8'
+
+services:
+  # ============================================
+  # 1. INFRASTRUCTURE COMMUNE
+  # ============================================
+  
+  minio:
+    image: minio/minio:latest
+    container_name: auth-scaler-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - auth-scaler-network
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: auth-scaler-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    networks:
+      - auth-scaler-network
+
+  # ============================================
+  # 2. BASES DE DONNÉES PAR SERVICE
+  # ============================================
+
+  # Base de données Phase 1
+  postgres-phase1:
+    image: postgres:15
+    container_name: auth-scaler-postgres-phase1
+    environment:
+      POSTGRES_USER: phase1_user
+      POSTGRES_PASSWORD: phase1_pass
+      POSTGRES_DB: phase1_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_phase1_data:/var/lib/postgresql/data
+    networks:
+      - auth-scaler-network
+
+  # Base de données Phase 2
+  postgres-phase2:
+    image: postgres:15
+    container_name: auth-scaler-postgres-phase2
+    environment:
+      POSTGRES_USER: phase2_user
+      POSTGRES_PASSWORD: phase2_pass
+      POSTGRES_DB: phase2_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_phase2_data:/var/lib/postgresql/data
+    networks:
+      - auth-scaler-network
+
+  # Base de données Phase 3
+  postgres-phase3:
+    image: postgres:15
+    container_name: auth-scaler-postgres-phase3
+    environment:
+      POSTGRES_USER: phase3_user
+      POSTGRES_PASSWORD: phase3_pass
+      POSTGRES_DB: phase3_db
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_phase3_data:/var/lib/postgresql/data
+    networks:
+      - auth-scaler-network
+
+  # Base de données Phase 4
+  postgres-phase4:
+    image: postgres:15
+    container_name: auth-scaler-postgres-phase4
+    environment:
+      POSTGRES_USER: phase4_user
+      POSTGRES_PASSWORD: phase4_pass
+      POSTGRES_DB: phase4_db
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres_phase4_data:/var/lib/postgresql/data
+    networks:
+      - auth-scaler-network
+
+  # Base de données Phase 5
+  postgres-phase5:
+    image: postgres:15
+    container_name: auth-scaler-postgres-phase5
+    environment:
+      POSTGRES_USER: phase5_user
+      POSTGRES_PASSWORD: phase5_pass
+      POSTGRES_DB: phase5_db
+    ports:
+      - "5436:5432"
+    volumes:
+      - postgres_phase5_data:/var/lib/postgresql/data
+    networks:
+      - auth-scaler-network
+
+  # ============================================
+  # 3. SERVICES (PHASES)
+  # ============================================
+
+  phase1-collector:
+    build: ./phase1-collector-service
+    container_name: auth-scaler-phase1
+    ports:
+      - "8001:8001"
+    environment:
+      - SERVICE_PORT=8001
+      - DATABASE_URL=postgresql://phase1_user:phase1_pass@postgres-phase1:5432/phase1_db
+      - MINIO_HOST=minio
+      - MINIO_BUCKET=auth-scaler-data
+    volumes:
+      - ./config:/app/config
+      - ./data:/app/data
+    depends_on:
+      - postgres-phase1
+      - minio
+    networks:
+      - auth-scaler-network
+
+  phase2-predictor:
+    build: ./phase2-predictor-service
+    container_name: auth-scaler-phase2
+    ports:
+      - "8002:8002"
+    environment:
+      - SERVICE_PORT=8002
+      - DATABASE_URL=postgresql://phase2_user:phase2_pass@postgres-phase2:5432/phase2_db
+    volumes:
+      - ./config:/app/config
+      - ./data:/app/data
+    depends_on:
+      - postgres-phase2
+    networks:
+      - auth-scaler-network
+
+  phase3-optimizer:
+    build: ./phase3-optimizer-service
+    container_name: auth-scaler-phase3
+    ports:
+      - "8003:8003"
+    environment:
+      - SERVICE_PORT=8003
+      - DATABASE_URL=postgresql://phase3_user:phase3_pass@postgres-phase3:5432/phase3_db
+    volumes:
+      - ./config:/app/config
+      - ./data:/app/data
+    depends_on:
+      - postgres-phase3
+    networks:
+      - auth-scaler-network
+
+  phase4-deployer:
+    build: ./phase4-deployer-service
+    container_name: auth-scaler-phase4
+    ports:
+      - "8004:8004"
+    environment:
+      - SERVICE_PORT=8004
+      - DATABASE_URL=postgresql://phase4_user:phase4_pass@postgres-phase4:5432/phase4_db
+    volumes:
+      - ./config:/app/config
+      - ./data:/app/data
+    depends_on:
+      - postgres-phase4
+    networks:
+      - auth-scaler-network
+
+  phase5-reporter:
+    build: ./phase5-reporter-service
+    container_name: auth-scaler-phase5
+    ports:
+      - "8005:8005"
+    environment:
+      - SERVICE_PORT=8005
+      - DATABASE_URL=postgresql://phase5_user:phase5_pass@postgres-phase5:5432/phase5_db
+    volumes:
+      - ./config:/app/config
+      - ./data:/app/data
+    depends_on:
+      - postgres-phase5
+    networks:
+      - auth-scaler-network
+
+  # ============================================
+  # 4. ORCHESTRATEUR
+  # ============================================
+
+  orchestrator:
+    build: ./orchestrator
+    container_name: auth-scaler-orchestrator
+    ports:
+      - "8080:8080"
+    environment:
+      - COLLECTOR_URL=http://phase1-collector:8001
+      - PREDICTOR_URL=http://phase2-predictor:8002
+      - OPTIMIZER_URL=http://phase3-optimizer:8003
+      - DEPLOYER_URL=http://phase4-deployer:8004
+      - REPORTER_URL=http://phase5-reporter:8005
+    depends_on:
+      - phase1-collector
+      - phase2-predictor
+      - phase3-optimizer
+      - phase4-deployer
+      - phase5-reporter
+    networks:
+      - auth-scaler-network
+
+networks:
+  auth-scaler-network:
+    driver: bridge
+
+volumes:
+  minio_data:
+  postgres_phase1_data:
+  postgres_phase2_data:
+  postgres_phase3_data:
+  postgres_phase4_data:
+  postgres_phase5_data:
