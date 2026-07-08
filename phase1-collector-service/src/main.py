@@ -9,7 +9,7 @@ from typing import List, Optional
 import uvicorn
 from sqlalchemy.orm import Session
 
-from .collector_actuator import ActuatorCollector   # ← MODIFICATION
+from .collector_actuator import ActuatorCollector 
 from .models.matrix_factory import MatrixFactory
 from .storage import StorageManager
 from .database import get_db, init_db
@@ -30,7 +30,7 @@ app = FastAPI(
 )
 
 # --- Initialisation des composants ---
-collector = ActuatorCollector()   # ← MODIFICATION
+collector = ActuatorCollector()  
 factory = MatrixFactory()
 storage = StorageManager()
 
