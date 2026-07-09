@@ -10,67 +10,90 @@ logger = logging.getLogger(__name__)
 class StorageManager:
     """
     Gère le stockage et le chargement des matrices.
+    Supporte : CPU, RAM, Latence, Débit
     """
-    
+
     def __init__(self, base_path: str = "./data/raw"):
         self.base_path = base_path
         os.makedirs(base_path, exist_ok=True)
-    
+
     def save_matrices(self, M_CPU: np.ndarray, M_RAM: np.ndarray,
+                      M_LAT: np.ndarray, M_BW: np.ndarray,
                       service_names: List[str], timestamp: str) -> str:
         """
-        Sauvegarde les matrices et les métadonnées.
+        Sauvegarde les 4 matrices et les métadonnées.
         """
         cpu_path = os.path.join(self.base_path, f"M_CPU_{timestamp}.npy")
         ram_path = os.path.join(self.base_path, f"M_RAM_{timestamp}.npy")
-        
+        lat_path = os.path.join(self.base_path, f"M_LAT_{timestamp}.npy")
+        bw_path = os.path.join(self.base_path, f"M_BW_{timestamp}.npy")
+
         np.save(cpu_path, M_CPU)
         np.save(ram_path, M_RAM)
-        
+        np.save(lat_path, M_LAT)
+        np.save(bw_path, M_BW)
+
         metadata = {
             "timestamp": timestamp,
             "services": service_names,
             "n_services": len(service_names),
             "n_samples": M_CPU.shape[1],
             "cpu_file": cpu_path,
-            "ram_file": ram_path
+            "ram_file": ram_path,
+            "lat_file": lat_path,
+            "bw_file": bw_path
         }
-        
+
         meta_path = os.path.join(self.base_path, f"metadata_{timestamp}.json")
         with open(meta_path, 'w') as f:
             json.dump(metadata, f, indent=2)
-        
+
         logger.info(f"Matrices sauvegardées: {len(service_names)} services, {M_CPU.shape[1]} échantillons")
+        logger.info(f"  CPU: {cpu_path}")
+        logger.info(f"  RAM: {ram_path}")
+        logger.info(f"  LAT: {lat_path}")
+        logger.info(f"  BW:  {bw_path}")
         return timestamp
-    
-    def load_matrices(self, timestamp: str) -> Tuple[np.ndarray, np.ndarray, List[str]]:
+
+    def load_matrices(self, timestamp: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, List[str]]:
         """
-        Charge les matrices et les métadonnées.
+        Charge les 4 matrices et les métadonnées.
+        
+        Returns:
+            Tuple: (M_CPU, M_RAM, M_LAT, M_BW, service_names)
         """
         cpu_path = os.path.join(self.base_path, f"M_CPU_{timestamp}.npy")
         ram_path = os.path.join(self.base_path, f"M_RAM_{timestamp}.npy")
+        lat_path = os.path.join(self.base_path, f"M_LAT_{timestamp}.npy")
+        bw_path = os.path.join(self.base_path, f"M_BW_{timestamp}.npy")
         meta_path = os.path.join(self.base_path, f"metadata_{timestamp}.json")
-        
+
         if not os.path.exists(cpu_path):
             raise FileNotFoundError(f"Fichier CPU non trouvé: {cpu_path}")
         if not os.path.exists(ram_path):
             raise FileNotFoundError(f"Fichier RAM non trouvé: {ram_path}")
-        
+        if not os.path.exists(lat_path):
+            raise FileNotFoundError(f"Fichier LAT non trouvé: {lat_path}")
+        if not os.path.exists(bw_path):
+            raise FileNotFoundError(f"Fichier BW non trouvé: {bw_path}")
+
         M_CPU = np.load(cpu_path)
         M_RAM = np.load(ram_path)
-        
+        M_LAT = np.load(lat_path)
+        M_BW = np.load(bw_path)
+
         with open(meta_path, 'r') as f:
             metadata = json.load(f)
-        
+
         service_names = metadata.get("services", [])
-        
+
         logger.info(f"Matrices chargées: {len(service_names)} services, {M_CPU.shape[1]} échantillons")
-        return M_CPU, M_RAM, service_names
-    
+        return M_CPU, M_RAM, M_LAT, M_BW, service_names
+
     def list_collections(self) -> List[dict]:
         """Liste toutes les collections disponibles."""
         import glob
-        
+
         meta_files = glob.glob(os.path.join(self.base_path, "metadata_*.json"))
         collections = []
         for meta_path in meta_files:
@@ -82,17 +105,17 @@ class StorageManager:
                 "n_samples": metadata.get("n_samples", 0)
             })
         return collections
-    
+
     def delete_collection(self, timestamp: str) -> bool:
-        """Supprime une collection."""
+        """Supprime une collection (tous les fichiers associés)."""
         import glob
-        
+
         files = glob.glob(os.path.join(self.base_path, f"*_{timestamp}.*"))
         if not files:
             return False
-        
+
         for file in files:
             os.remove(file)
-        
+
         logger.info(f"Collection {timestamp} supprimée")
         return True

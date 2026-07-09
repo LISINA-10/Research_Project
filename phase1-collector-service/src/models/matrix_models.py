@@ -18,6 +18,8 @@ class ServiceInfo:
     nom: str
     url_cpu: str
     url_ram: str
+    url_lat: Optional[str] = None      # ← NOUVEAU : URL pour la latence
+    url_bw: Optional[str] = None       # ← NOUVEAU : URL pour le débit
     transactions: int
 
 
@@ -41,8 +43,10 @@ class CollectionConfig:
 @dataclass
 class MetricsMatrix:
     """Matrice de métriques collectées"""
-    cpu_matrix: np.ndarray      # Shape: (n_services, n_samples)
-    ram_matrix: np.ndarray      # Shape: (n_services, n_samples)
+    cpu_matrix: np.ndarray          # Shape: (n_services, n_samples)
+    ram_matrix: np.ndarray          # Shape: (n_services, n_samples)
+    lat_matrix: np.ndarray          # ← NOUVEAU : Latence (ms)
+    bw_matrix: np.ndarray           # ← NOUVEAU : Débit (octets/seconde)
     service_names: List[str]
     n_services: int
     n_samples: int
@@ -52,6 +56,8 @@ class MetricsMatrix:
         return {
             "cpu": self.cpu_matrix.tolist(),
             "ram": self.ram_matrix.tolist(),
+            "lat": self.lat_matrix.tolist(),      # ← NOUVEAU
+            "bw": self.bw_matrix.tolist(),        # ← NOUVEAU
             "services": self.service_names,
             "n_services": self.n_services,
             "n_samples": self.n_samples,

@@ -10,6 +10,8 @@
             "nom": "",
             "url_cpu": "",
             "url_ram": "",
+            "url_lat": "",
+            "url_bw": "",
             "transactions": 0
         }
     ]

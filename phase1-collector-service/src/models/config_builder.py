@@ -10,11 +10,11 @@ class ConfigBuilder:
     """
     Construit les objets de configuration à partir du fichier JSON.
     """
-    
+
     def __init__(self, config_path: str = "config/config.json"):
         self.config_path = config_path
         self.data = None
-    
+
     def load(self) -> 'ConfigBuilder':
         """Charge le fichier JSON."""
         try:
@@ -28,7 +28,7 @@ class ConfigBuilder:
             logger.error(f"Erreur de parsing JSON: {e}")
             self.data = self._get_default_data()
         return self
-    
+
     def _get_default_data(self) -> dict:
         """Retourne des données par défaut."""
         return {
@@ -40,7 +40,7 @@ class ConfigBuilder:
             },
             "services": []
         }
-    
+
     def build_ressources(self) -> Ressources:
         """Crée l'objet Ressources."""
         r = self.data.get("ressources", {})
@@ -50,7 +50,7 @@ class ConfigBuilder:
             duree_collecte=r.get("duree_collecte", 0),
             interval_collecte=r.get("interval_collecte", 0)
         )
-    
+
     def build_services(self) -> list:
         """Crée la liste des objets ServiceInfo."""
         services_data = self.data.get("services", [])
@@ -60,17 +60,19 @@ class ConfigBuilder:
                 nom=s.get("nom", ""),
                 url_cpu=s.get("url_cpu", ""),
                 url_ram=s.get("url_ram", ""),
+                url_lat=s.get("url_lat", ""),    # ← NOUVEAU
+                url_bw=s.get("url_bw", ""),      # ← NOUVEAU
                 transactions=s.get("transactions", 0)
             )
             services.append(service)
         return services
-    
+
     def build_config(self) -> CollectionConfig:
         """Construit la configuration complète."""
         ressources = self.build_ressources()
         services = self.build_services()
         return CollectionConfig(ressources=ressources, services=services)
-    
+
     def get_raw_data(self) -> dict:
         """Retourne les données brutes du JSON."""
         return self.data

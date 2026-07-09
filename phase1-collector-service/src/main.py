@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 # --- Initialisation de l'application ---
 app = FastAPI(
     title="Auth-Scaler Phase 1: Metrics Collection",
-    description="Collecte les métriques CPU/RAM via Spring Boot Actuator",
+    description="Collecte les métriques CPU, RAM, Latence et Débit via Actuator",
     version="1.0.0"
 )
 
@@ -49,6 +49,8 @@ class ServiceInput(BaseModel):
     nom: str
     url_cpu: str
     url_ram: str
+    url_lat: Optional[str] = "/actuator/health"   # ← NOUVEAU
+    url_bw: Optional[str] = "/actuator/health"    # ← NOUVEAU
     transactions: int
 
 class CollectRequest(BaseModel):
@@ -78,6 +80,7 @@ async def health():
 async def collect(request: CollectRequest, db: Session = Depends(get_db)):
     """
     Lance la collecte des métriques depuis les URLs fournies.
+    Collecte : CPU, RAM, Latence, Débit
     """
     job_id = request.job_id or datetime.now().strftime("%Y%m%d_%H%M%S")
     logger.info(f"📊 Démarrage collecte: {job_id}")
@@ -97,7 +100,7 @@ async def collect(request: CollectRequest, db: Session = Depends(get_db)):
         db.add(job)
         db.commit()
 
-        # 2. Collecter les métriques
+        # 2. Collecter les métriques (CPU, RAM, LAT, BW)
         services = [s.dict() for s in request.services]
         logger.info(f"  Services: {[s['nom'] for s in services]}")
 
@@ -109,7 +112,7 @@ async def collect(request: CollectRequest, db: Session = Depends(get_db)):
             base_port=request.base_port
         )
 
-        # 3. Sauvegarder les matrices sur le disque
+        # 3. Sauvegarder les 4 matrices sur le disque
         factory.save_to_file(matrix, job_id)
 
         # 4. Enregistrer les métadonnées des services en base
@@ -119,9 +122,13 @@ async def collect(request: CollectRequest, db: Session = Depends(get_db)):
                 service_name=service['nom'],
                 url_cpu=service['url_cpu'],
                 url_ram=service['url_ram'],
+                url_lat=service.get('url_lat', '/actuator/health'),   # ← NOUVEAU
+                url_bw=service.get('url_bw', '/actuator/health'),     # ← NOUVEAU
                 transactions_target=service['transactions'],
                 cpu_file=f"M_CPU_{job_id}.npy",
-                ram_file=f"M_RAM_{job_id}.npy"
+                ram_file=f"M_RAM_{job_id}.npy",
+                lat_file=f"M_LAT_{job_id}.npy",     # ← NOUVEAU
+                bw_file=f"M_BW_{job_id}.npy"        # ← NOUVEAU
             )
             db.add(metadata)
 
@@ -197,6 +204,8 @@ async def get_job(job_id: str, db: Session = Depends(get_db)):
                 "name": s.service_name,
                 "url_cpu": s.url_cpu,
                 "url_ram": s.url_ram,
+                "url_lat": s.url_lat,      # ← NOUVEAU
+                "url_bw": s.url_bw,        # ← NOUVEAU
                 "transactions_target": s.transactions_target
             }
             for s in services
@@ -215,13 +224,20 @@ async def list_collections():
 async def get_status(job_id: str):
     """Récupère le statut d'une collection à partir des fichiers."""
     try:
-        M_CPU, M_RAM, services = storage.load_matrices(job_id)
+        # Charger les 4 matrices
+        M_CPU, M_RAM, M_LAT, M_BW, services = storage.load_matrices(job_id)
         return {
             "job_id": job_id,
             "status": "completed",
             "services": services,
             "n_services": len(services),
-            "n_samples": M_CPU.shape[1]
+            "n_samples": M_CPU.shape[1],
+            "matrices": {
+                "cpu": M_CPU.shape,
+                "ram": M_RAM.shape,
+                "lat": M_LAT.shape,
+                "bw": M_BW.shape
+            }
         }
     except FileNotFoundError:
         return {
@@ -249,7 +265,7 @@ async def delete_collection(job_id: str, db: Session = Depends(get_db)):
 
 # --- Frontend (optionnel) ---
 try:
-    app.mount("/static", StaticFiles(directory="../frontend/static"), name="static")   # ← MODIFICATION
+    app.mount("/static", StaticFiles(directory="../frontend/static"), name="static")
     
     @app.get("/")
     async def serve_frontend():

@@ -31,11 +31,21 @@ class ServiceMetadata(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     job_id = Column(String(100), ForeignKey("collection_jobs.job_id"), nullable=False, index=True)
     service_name = Column(String(200), nullable=False)
+    
+    # URLs pour les métriques
     url_cpu = Column(String(500), nullable=False)
     url_ram = Column(String(500), nullable=False)
+    url_lat = Column(String(500), nullable=True)   # ← NOUVEAU : URL pour la latence
+    url_bw = Column(String(500), nullable=True)    # ← NOUVEAU : URL pour le débit
+    
+    # Objectif de transactions
     transactions_target = Column(Integer, default=0)
-    cpu_file = Column(String(500), nullable=True)   # Chemin du fichier .npy
-    ram_file = Column(String(500), nullable=True)   # Chemin du fichier .npy
+    
+    # Chemins des fichiers des matrices (4 métriques)
+    cpu_file = Column(String(500), nullable=True)
+    ram_file = Column(String(500), nullable=True)
+    lat_file = Column(String(500), nullable=True)  # ← NOUVEAU
+    bw_file = Column(String(500), nullable=True)   # ← NOUVEAU
     
     # Relation inverse
     job = relationship("CollectionJob", back_populates="services")
