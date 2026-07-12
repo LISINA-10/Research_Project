@@ -54,17 +54,15 @@ async def execute_pipeline(job_id: str):
         resp1 = requests.post(
             f"{COLLECTOR_URL}/api/v1/collect",
             json={
-                "prometheus_url": "http://prometheus:9090",
-                "services": [
-                    {"name": "order-service"},
-                    {"name": "payment-service"},
-                    {"name": "notification-service"}
-                ],
+                "use_config": True,
                 "duration_seconds": 30,
                 "interval_seconds": 5,
+                "base_port": 8080,
                 "job_id": job_id
-            }
+            },
+            timeout=120
         )
+        resp1.raise_for_status()
         phases["phase1"] = resp1.json()
         logger.info(f"Phase 1: {phases['phase1']}")
         

@@ -4,6 +4,7 @@ import numpy as np
 import logging
 from typing import List, Dict, Any
 
+from .load_generator import LoadGenerator
 from .models.matrix_factory import MatrixFactory
 from .models.matrix_models import MetricsMatrix
 
@@ -16,13 +17,17 @@ class ActuatorCollector:
     Collecte : CPU, RAM, Latence, Débit
     """
 
+    def __init__(self) -> None:
+        self.load_generator = LoadGenerator()
+
     def collect(self, services: List[Dict[str, Any]], duration: int, interval: int,
                 factory: MatrixFactory, base_port: int = 8080) -> MetricsMatrix:
         """
         Collecte les métriques depuis les endpoints.
+        Lance en parallèle un générateur de charge si transactions > 0.
         """
         n_services = len(services)
-        n_samples = int(duration / interval)
+        n_samples = max(1, int(duration / interval))
 
         service_names = [s.get('nom', 'unknown') for s in services]
         matrix = factory.create_matrix(n_services, n_samples, service_names)
@@ -30,45 +35,52 @@ class ActuatorCollector:
         logger.info(f"Collecte: {n_samples} échantillons pour {n_services} services")
         logger.info(f"Services: {service_names}")
 
-        for j in range(n_samples):
-            start_time = time.time()
+        self.load_generator.start(services, base_port, duration)
 
-            for i, service in enumerate(services):
-                service_name = service.get('nom')
-                url_cpu = service.get('url_cpu')
-                url_ram = service.get('url_ram')
+        try:
+            for j in range(n_samples):
+                start_time = time.time()
 
-                base_url = f"http://{service_name}:{base_port}"
+                for i, service in enumerate(services):
+                    service_name = service.get('nom')
+                    url_cpu = service.get('url_cpu')
+                    url_ram = service.get('url_ram')
+                    url_lat = service.get('url_lat', '/actuator/health')
+                    url_bw = service.get('url_bw', '/actuator/health')
 
-                # --- Collecte CPU et RAM ---
-                cpu_val = self._query_generic(f"{base_url}{url_cpu}")
-                ram_val = self._query_generic(f"{base_url}{url_ram}")
+                    base_url = f"http://{service_name}:{base_port}"
 
-                # --- Collecte Latence et Débit ---
-                lat_val = self._query_latency(service_name, base_port)
-                bw_val = self._query_bandwidth(service_name, base_port)
+                    cpu_val = self._query_generic(f"{base_url}{url_cpu}")
+                    ram_val = self._query_generic(f"{base_url}{url_ram}")
+                    lat_val = self._query_latency(service_name, base_port, url_lat)
+                    bw_val = self._query_bandwidth(service_name, base_port, url_bw)
 
-                # --- Remplissage des matrices ---
-                matrix.cpu_matrix[i, j] = cpu_val if cpu_val is not None else np.nan
-                matrix.ram_matrix[i, j] = ram_val if ram_val is not None else np.nan
-                matrix.lat_matrix[i, j] = lat_val if lat_val is not None else np.nan
-                matrix.bw_matrix[i, j] = bw_val if bw_val is not None else np.nan
+                    matrix.cpu_matrix[i, j] = cpu_val if cpu_val is not None else np.nan
+                    matrix.ram_matrix[i, j] = ram_val if ram_val is not None else np.nan
+                    matrix.lat_matrix[i, j] = lat_val if lat_val is not None else np.nan
+                    matrix.bw_matrix[i, j] = bw_val if bw_val is not None else np.nan
 
-                logger.debug(f"  {service_name}: CPU={matrix.cpu_matrix[i,j]:.3f}, "
-                             f"RAM={matrix.ram_matrix[i,j]:.2f}, "
-                             f"Lat={matrix.lat_matrix[i,j]:.2f}ms, "
-                             f"BW={matrix.bw_matrix[i,j]:.2f} bytes/s")
+                    logger.debug(
+                        "  %s: CPU=%.3f, RAM=%.2f, Lat=%.2fms, BW=%.2f bytes/s",
+                        service_name,
+                        matrix.cpu_matrix[i, j],
+                        matrix.ram_matrix[i, j],
+                        matrix.lat_matrix[i, j],
+                        matrix.bw_matrix[i, j],
+                    )
 
-            elapsed = time.time() - start_time
-            sleep_time = max(0, interval - elapsed)
-            if sleep_time > 0:
-                time.sleep(sleep_time)
+                elapsed = time.time() - start_time
+                sleep_time = max(0, interval - elapsed)
+                if sleep_time > 0:
+                    time.sleep(sleep_time)
+        finally:
+            self.load_generator.stop()
 
-        logger.info(f"Collecte terminée.")
-        logger.info(f"  NaN CPU: {np.isnan(matrix.cpu_matrix).sum()}")
-        logger.info(f"  NaN RAM: {np.isnan(matrix.ram_matrix).sum()}")
-        logger.info(f"  NaN LAT: {np.isnan(matrix.lat_matrix).sum()}")
-        logger.info(f"  NaN BW:  {np.isnan(matrix.bw_matrix).sum()}")
+        logger.info("Collecte terminée.")
+        logger.info("  NaN CPU: %s", np.isnan(matrix.cpu_matrix).sum())
+        logger.info("  NaN RAM: %s", np.isnan(matrix.ram_matrix).sum())
+        logger.info("  NaN LAT: %s", np.isnan(matrix.lat_matrix).sum())
+        logger.info("  NaN BW:  %s", np.isnan(matrix.bw_matrix).sum())
 
         return matrix
 
@@ -118,6 +130,11 @@ class ActuatorCollector:
             logger.warning(f"Erreur ({url}): {e}")
             return None
 
+    def _normalize_endpoint(self, endpoint: str) -> str:
+        if not endpoint:
+            return "/actuator/health"
+        return endpoint if endpoint.startswith("/") else f"/{endpoint}"
+
     def _query_latency(self, service_name: str, base_port: int, endpoint: str = "/actuator/health") -> float:
         """
         Mesure la latence en effectuant un appel HTTP vers le service.
@@ -130,12 +147,13 @@ class ActuatorCollector:
         Returns:
             Latence en millisecondes (ms)
         """
+        endpoint = self._normalize_endpoint(endpoint)
         url = f"http://{service_name}:{base_port}{endpoint}"
         try:
             start = time.time()
             response = requests.get(url, timeout=5)
             end = time.time()
-            latency = (end - start) * 1000  # conversion en millisecondes
+            latency = (end - start) * 1000
             
             # Vérifier que la réponse est valide
             if response.status_code == 200:
@@ -165,15 +183,16 @@ class ActuatorCollector:
         Returns:
             Débit en octets/seconde
         """
+        endpoint = self._normalize_endpoint(endpoint)
         url = f"http://{service_name}:{base_port}{endpoint}"
         try:
             start = time.time()
             response = requests.get(url, timeout=5)
             end = time.time()
             duration = end - start
-            
+
             if duration > 0 and response.status_code == 200:
-                bandwidth = len(response.content) / duration  # octets/seconde
+                bandwidth = len(response.content) / duration
                 return bandwidth
             else:
                 return np.nan

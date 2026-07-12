@@ -18,9 +18,9 @@ class ServiceInfo:
     nom: str
     url_cpu: str
     url_ram: str
-    url_lat: Optional[str] = None      # ← NOUVEAU : URL pour la latence
-    url_bw: Optional[str] = None       # ← NOUVEAU : URL pour le débit
-    transactions: int
+    transactions: int                  # ← Déplacé ici (sans valeur par défaut)
+    url_lat: Optional[str] = None      # ← Optionnel (avec valeur par défaut)
+    url_bw: Optional[str] = None       # ← Optionnel (avec valeur par défaut)
 
 
 @dataclass

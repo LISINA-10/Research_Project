@@ -3,31 +3,63 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Auth-Scaler - Configuration</title>
-    <link rel="stylesheet" href="/static/styles.css">  
+    <title>Auth-Scaler - Phase 1</title>
+    <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
     <div class="container">
-        <h1>🚀 Auth-Scaler</h1>
-        <p class="subtitle">Entrez les informations de vos services pour lancer la collecte</p>
+        <h1>Auth-Scaler — Phase 1</h1>
+        <p class="subtitle">Collecte de métriques CPU, RAM, latence et débit</p>
 
-        <div id="services-container">
-            <div class="service-row">
-                <input type="text" class="service-name" placeholder="Nom du service" value="order-service">
-                <input type="text" class="service-url-cpu" placeholder="URL CPU" value="/actuator/metrics/system.cpu.usage">
-                <input type="text" class="service-url-ram" placeholder="URL RAM" value="/actuator/metrics/jvm.memory.used">
-                <input type="number" class="service-tps" placeholder="TPS cible" value="100">
+        <div class="param-section">
+            <h3>Paramètres de collecte</h3>
+            <div class="param-row">
+                <div class="param-group">
+                    <label for="duration">Durée (s)</label>
+                    <input type="number" id="duration" value="30" min="5">
+                </div>
+                <div class="param-group">
+                    <label for="interval">Intervalle (s)</label>
+                    <input type="number" id="interval" value="5" min="1">
+                </div>
+                <div class="param-group">
+                    <label for="base-port">Port</label>
+                    <input type="number" id="base-port" value="8080" min="1">
+                </div>
+            </div>
+        </div>
+
+        <div class="service-section">
+            <h3>Services à monitorer</h3>
+            <div class="header-row">
+                <span>Nom</span>
+                <span>URL CPU</span>
+                <span>URL RAM</span>
+                <span>URL Latence</span>
+                <span>URL Débit</span>
+                <span>TPS</span>
+            </div>
+            <div id="services-container">
+                <div class="service-row">
+                    <input type="text" class="service-name" placeholder="Nom du service" value="order-service">
+                    <input type="text" class="service-url-cpu" placeholder="URL CPU" value="/actuator/metrics/system.cpu.usage">
+                    <input type="text" class="service-url-ram" placeholder="URL RAM" value="/actuator/metrics/jvm.memory.used">
+                    <input type="text" class="service-url-lat" placeholder="URL Latence" value="/actuator/health">
+                    <input type="text" class="service-url-bw" placeholder="URL Débit" value="/actuator/health">
+                    <input type="number" class="service-tps" placeholder="TPS cible" value="20" min="0">
+                </div>
             </div>
         </div>
 
         <div class="actions">
             <button onclick="addService()" class="btn btn-secondary">+ Ajouter un service</button>
             <button onclick="startCollection()" class="btn btn-primary">Lancer la collecte</button>
+            <button onclick="startFromConfig()" class="btn btn-secondary">Collecter depuis config.json</button>
         </div>
 
         <div id="resultats" class="results"></div>
         <div id="logs" class="logs"></div>
     </div>
-    <script src="/static/app.js"></script>   
+    <script src="/static/app.js"></script>
 </body>
 </html>

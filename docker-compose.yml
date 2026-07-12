@@ -109,11 +109,49 @@ services:
     environment:
       - SERVICE_PORT=8001
       - DATABASE_URL=postgresql://phase1_user:phase1_pass@postgres-phase1:5432/phase1_db
+      - FRONTEND_DIR=/app/frontend
+      - CONFIG_PATH=/app/config/config.json
+      - DATA_PATH=/app/data/raw
     volumes:
       - ./config:/app/config
       - ./data:/app/data
+      - ./frontend:/app/frontend
     depends_on:
       - postgres-phase1
+      - order-service
+      - payment-service
+      - notification-service
+    networks:
+      - auth-scaler-network
+
+  # --- Services mock pour tests Phase 1 ---
+  order-service:
+    build: ./mock-services
+    container_name: auth-scaler-order-service
+    environment:
+      - SERVICE_NAME=order-service
+      - BASE_CPU=0.20
+      - LOAD_FACTOR=0.0005
+    networks:
+      - auth-scaler-network
+
+  payment-service:
+    build: ./mock-services
+    container_name: auth-scaler-payment-service
+    environment:
+      - SERVICE_NAME=payment-service
+      - BASE_CPU=0.15
+      - LOAD_FACTOR=0.0003
+    networks:
+      - auth-scaler-network
+
+  notification-service:
+    build: ./mock-services
+    container_name: auth-scaler-notification-service
+    environment:
+      - SERVICE_NAME=notification-service
+      - BASE_CPU=0.10
+      - LOAD_FACTOR=0.0002
     networks:
       - auth-scaler-network
 

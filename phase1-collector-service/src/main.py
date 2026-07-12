@@ -1,16 +1,18 @@
 import os
 import logging
+from pathlib import Path
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional
 import uvicorn
 from sqlalchemy.orm import Session
 
 from .collector_actuator import ActuatorCollector 
 from .models.matrix_factory import MatrixFactory
+from .models.config_builder import ConfigBuilder
 from .storage import StorageManager
 from .database import get_db, init_db
 from .database.models import CollectionJob, ServiceMetadata
@@ -22,17 +24,23 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+APP_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = APP_ROOT.parent
+FRONTEND_DIR = Path(os.getenv("FRONTEND_DIR", PROJECT_ROOT / "frontend"))
+CONFIG_PATH = os.getenv("CONFIG_PATH", str(PROJECT_ROOT / "config" / "config.json"))
+DATA_PATH = os.getenv("DATA_PATH", str(PROJECT_ROOT / "data" / "raw"))
+
 # --- Initialisation de l'application ---
 app = FastAPI(
     title="Auth-Scaler Phase 1: Metrics Collection",
     description="Collecte les métriques CPU, RAM, Latence et Débit via Actuator",
-    version="1.0.0"
+    version="1.1.0"
 )
 
 # --- Initialisation des composants ---
 collector = ActuatorCollector()  
-factory = MatrixFactory()
-storage = StorageManager()
+factory = MatrixFactory(config_path=CONFIG_PATH, base_path=DATA_PATH)
+storage = StorageManager(base_path=DATA_PATH)
 
 # --- Initialisation de la base de données ---
 @app.on_event("startup")
@@ -54,11 +62,12 @@ class ServiceInput(BaseModel):
     transactions: int
 
 class CollectRequest(BaseModel):
-    services: List[ServiceInput]
-    duration_seconds: int
-    interval_seconds: int
+    services: List[ServiceInput] = Field(default_factory=list)
+    duration_seconds: Optional[int] = None
+    interval_seconds: Optional[int] = None
     job_id: Optional[str] = None
     base_port: int = 8080
+    use_config: bool = False
 
 class CollectResponse(BaseModel):
     status: str
@@ -66,6 +75,48 @@ class CollectResponse(BaseModel):
     timestamp: str
     job_id: str
     shape: dict
+    load_enabled: bool = False
+
+
+def _resolve_collection_params(request: CollectRequest) -> dict:
+    """Fusionne la requête API et config.json si demandé."""
+    config = factory.get_config()
+
+    duration = request.duration_seconds or config.ressources.duree_collecte or 30
+    interval = request.interval_seconds or config.ressources.interval_collecte or 5
+    base_port = request.base_port
+
+    if request.services:
+        services = [s.dict() for s in request.services]
+    elif request.use_config and config.services:
+        services = [
+            {
+                "nom": s.nom,
+                "url_cpu": s.url_cpu,
+                "url_ram": s.url_ram,
+                "url_lat": s.url_lat or "/actuator/health",
+                "url_bw": s.url_bw or "/actuator/health",
+                "transactions": s.transactions,
+            }
+            for s in config.services
+            if s.nom
+        ]
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Aucun service fourni. Envoyez une liste services ou activez use_config=true."
+        )
+
+    if duration <= 0 or interval <= 0:
+        raise HTTPException(status_code=400, detail="duration_seconds et interval_seconds doivent être > 0")
+
+    return {
+        "services": services,
+        "duration_seconds": duration,
+        "interval_seconds": interval,
+        "base_port": base_port,
+        "load_enabled": any(s.get("transactions", 0) > 0 for s in services),
+    }
 
 # --- Endpoints API ---
 @app.get("/health")
@@ -76,40 +127,66 @@ async def health():
         "mode": "actuator"
     }
 
+@app.get("/api/v1/config")
+async def get_config():
+    """Retourne la configuration chargée depuis config.json."""
+    config = factory.get_config()
+    return {
+        "ressources": {
+            "cpu_cores": config.ressources.cpu_cores,
+            "ram_gb": config.ressources.ram_gb,
+            "duree_collecte": config.ressources.duree_collecte,
+            "interval_collecte": config.ressources.interval_collecte,
+        },
+        "services": [
+            {
+                "nom": s.nom,
+                "url_cpu": s.url_cpu,
+                "url_ram": s.url_ram,
+                "url_lat": s.url_lat,
+                "url_bw": s.url_bw,
+                "transactions": s.transactions,
+            }
+            for s in config.services
+        ],
+    }
+
+
 @app.post("/api/v1/collect", response_model=CollectResponse)
 async def collect(request: CollectRequest, db: Session = Depends(get_db)):
     """
     Lance la collecte des métriques depuis les URLs fournies.
     Collecte : CPU, RAM, Latence, Débit
     """
+    params = _resolve_collection_params(request)
     job_id = request.job_id or datetime.now().strftime("%Y%m%d_%H%M%S")
     logger.info(f"📊 Démarrage collecte: {job_id}")
 
     try:
-        # 1. Créer l'entrée dans la base de données
         job = CollectionJob(
             job_id=job_id,
             status="running",
-            duration_seconds=request.duration_seconds,
-            interval_seconds=request.interval_seconds,
-            n_services=len(request.services),
-            n_samples=int(request.duration_seconds / request.interval_seconds),
-            base_port=request.base_port,
+            duration_seconds=params["duration_seconds"],
+            interval_seconds=params["interval_seconds"],
+            n_services=len(params["services"]),
+            n_samples=max(1, int(params["duration_seconds"] / params["interval_seconds"])),
+            base_port=params["base_port"],
             started_at=datetime.now()
         )
         db.add(job)
         db.commit()
 
-        # 2. Collecter les métriques (CPU, RAM, LAT, BW)
-        services = [s.dict() for s in request.services]
+        services = params["services"]
         logger.info(f"  Services: {[s['nom'] for s in services]}")
+        if params["load_enabled"]:
+            logger.info("  Générateur de charge activé (transactions > 0)")
 
         matrix = collector.collect(
             services=services,
-            duration=request.duration_seconds,
-            interval=request.interval_seconds,
+            duration=params["duration_seconds"],
+            interval=params["interval_seconds"],
             factory=factory,
-            base_port=request.base_port
+            base_port=params["base_port"]
         )
 
         # 3. Sauvegarder les 4 matrices sur le disque
@@ -145,7 +222,8 @@ async def collect(request: CollectRequest, db: Session = Depends(get_db)):
             shape={
                 "services": matrix.n_services,
                 "samples": matrix.n_samples
-            }
+            },
+            load_enabled=params["load_enabled"],
         )
 
     except Exception as e:
@@ -264,16 +342,19 @@ async def delete_collection(job_id: str, db: Session = Depends(get_db)):
 
 
 # --- Frontend (optionnel) ---
-try:
-    app.mount("/static", StaticFiles(directory="../frontend/static"), name="static")
-    
+STATIC_DIR = FRONTEND_DIR / "static"
+INDEX_FILE = FRONTEND_DIR / "index.html"
+
+if STATIC_DIR.exists() and INDEX_FILE.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
     @app.get("/")
     async def serve_frontend():
-        return FileResponse("../frontend/index.html")
-    
-    logger.info("Frontend servi depuis /")
-except Exception as e:
-    logger.warning(f"Frontend non disponible: {e}")
+        return FileResponse(str(INDEX_FILE))
+
+    logger.info("Frontend servi depuis %s", FRONTEND_DIR)
+else:
+    logger.warning("Frontend non disponible (%s)", FRONTEND_DIR)
 
 
 # --- Point d'entrée ---

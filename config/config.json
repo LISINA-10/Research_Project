@@ -1,18 +1,34 @@
 {
     "ressources": {
-        "cpu_cores": 0,
-        "ram_gb": 0,
-        "duree_collecte": 0,
-        "interval_collecte": 0
+        "cpu_cores": 4,
+        "ram_gb": 8,
+        "duree_collecte": 30,
+        "interval_collecte": 5
     },
     "services": [
         {
-            "nom": "",
-            "url_cpu": "",
-            "url_ram": "",
-            "url_lat": "",
-            "url_bw": "",
-            "transactions": 0
+            "nom": "order-service",
+            "url_cpu": "/actuator/metrics/system.cpu.usage",
+            "url_ram": "/actuator/metrics/jvm.memory.used",
+            "url_lat": "/actuator/health",
+            "url_bw": "/actuator/health",
+            "transactions": 20
+        },
+        {
+            "nom": "payment-service",
+            "url_cpu": "/actuator/metrics/system.cpu.usage",
+            "url_ram": "/actuator/metrics/jvm.memory.used",
+            "url_lat": "/actuator/health",
+            "url_bw": "/actuator/health",
+            "transactions": 15
+        },
+        {
+            "nom": "notification-service",
+            "url_cpu": "/actuator/metrics/system.cpu.usage",
+            "url_ram": "/actuator/metrics/jvm.memory.used",
+            "url_lat": "/actuator/health",
+            "url_bw": "/actuator/health",
+            "transactions": 10
         }
     ]
 }
