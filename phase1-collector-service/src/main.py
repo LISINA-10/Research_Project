@@ -341,6 +341,29 @@ async def delete_collection(job_id: str, db: Session = Depends(get_db)):
         return {"status": "partial", "message": f"Collection {job_id} supprimée de la DB mais fichiers non trouvés"}
 
 
+@app.get("/api/v1/matrix/{job_id}")
+async def get_matrix(job_id: str):
+    """
+    Retourne les 4 matrices pour un job donné.
+    """
+    try:
+        M_CPU, M_RAM, M_LAT, M_BW, services = storage.load_matrices(job_id)
+        return {
+            "job_id": job_id,
+            "services": services,
+            "n_services": len(services),
+            "n_samples": M_CPU.shape[1],
+            "cpu": M_CPU.tolist(),
+            "ram": M_RAM.tolist(),
+            "lat": M_LAT.tolist(),
+            "bw": M_BW.tolist()
+        }
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Matrices non trouvées")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # --- Frontend (optionnel) ---
 STATIC_DIR = FRONTEND_DIR / "static"
 INDEX_FILE = FRONTEND_DIR / "index.html"

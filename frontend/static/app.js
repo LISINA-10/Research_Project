@@ -131,3 +131,122 @@ async function startFromConfig() {
     showLog('Collecte depuis config.json');
     await runCollect(payload);
 }
+
+// ----- AFFICHAGE DES MATRICES -----
+
+let currentMatrixData = null;
+
+async function viewMatrices(jobId) {
+    const section = document.getElementById('matrix-section');
+    const container = document.getElementById('matrix-container');
+
+    try {
+        const response = await fetch(`/api/v1/matrix/${jobId}`);
+        if (!response.ok) {
+            container.innerHTML = `<p style="color:red;">❌ Erreur: ${response.status}</p>`;
+            section.style.display = 'block';
+            return;
+        }
+
+        const data = await response.json();
+        currentMatrixData = data;
+
+        let html = `<p><strong>Job:</strong> ${data.job_id}</p>`;
+        html += `<p><strong>Services:</strong> ${data.services.join(', ')}</p>`;
+        html += `<p><strong>Échantillons:</strong> ${data.n_samples}</p>`;
+
+        // Fonction pour générer un tableau
+        function renderTable(title, matrix, unit) {
+            if (!matrix || matrix.length === 0) return '';
+            let table = `<h4>${title} (${unit})</h4>`;
+            table += '<table class="matrix-table"><thead><tr><th>Service \\ Échantillon</th>';
+            for (let j = 0; j < data.n_samples; j++) {
+                table += `<th>t${j+1}</th>`;
+            }
+            table += '</tr></thead><tbody>';
+            for (let i = 0; i < data.n_services; i++) {
+                table += `<tr><td><strong>${data.services[i]}</strong></td>`;
+                for (let j = 0; j < data.n_samples; j++) {
+                    const val = matrix[i][j];
+                    const display = (val === null || isNaN(val)) ? '—' : val.toFixed(3);
+                    table += `<td>${display}</td>`;
+                }
+                table += '</tr>';
+            }
+            table += '</tbody></table>';
+            return table;
+        }
+
+        html += renderTable('CPU', data.cpu, 'cœurs');
+        html += renderTable('RAM', data.ram, 'octets');
+        html += renderTable('Latence', data.lat, 'ms');
+        html += renderTable('Débit', data.bw, 'octets/s');
+
+        container.innerHTML = html;
+        section.style.display = 'block';
+    } catch (error) {
+        container.innerHTML = `<p style="color:red;">❌ Erreur: ${error.message}</p>`;
+        section.style.display = 'block';
+    }
+}
+
+function downloadMatrixCSV() {
+    if (!currentMatrixData) return;
+    const data = currentMatrixData;
+    let csv = 'Service,Échantillon,CPU,RAM,Latence,Débit\n';
+    for (let i = 0; i < data.n_services; i++) {
+        for (let j = 0; j < data.n_samples; j++) {
+            const row = [
+                data.services[i],
+                j+1,
+                data.cpu[i][j]?.toFixed(4) || '',
+                data.ram[i][j]?.toFixed(4) || '',
+                data.lat[i][j]?.toFixed(4) || '',
+                data.bw[i][j]?.toFixed(4) || ''
+            ];
+            csv += row.join(',') + '\n';
+        }
+    }
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `matrices_${data.job_id}.csv`;
+    link.click();
+}
+
+
+async function displayJobs() {
+    try {
+        const response = await fetch('/api/v1/jobs');
+        if (!response.ok) return;
+        const data = await response.json();
+
+        let html = '<h3>📋 Historique des collectes</h3>';
+        if (!data.jobs || data.jobs.length === 0) {
+            html += '<p>Aucune collecte effectuée.</p>';
+        } else {
+            html += '<table class="matrix-table">';
+            html += '<thead><tr><th>Job ID</th><th>Services</th><th>Échantillons</th><th>Statut</th><th>Action</th></tr></thead>';
+            html += '<tbody>';
+            data.jobs.forEach(job => {
+                html += `<tr>
+                    <td><strong>${job.job_id}</strong></td>
+                    <td>${job.services}</td>
+                    <td>${job.samples}</td>
+                    <td>${job.status}</td>
+                    <td><button onclick="viewMatrices('${job.job_id}')" class="btn btn-secondary btn-small">Voir matrices</button></td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+        }
+        document.getElementById('matrix-container').innerHTML = html;
+        document.getElementById('matrix-section').style.display = 'block';
+    } catch (error) {
+        console.error('Erreur displayJobs:', error);
+    }
+}
+
+
+document.addEventListener('DOMContentLoaded', function() {
+    displayJobs();
+});

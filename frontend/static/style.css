@@ -185,3 +185,30 @@ h1 {
 #logs.show {
     display: block;
 }
+
+.matrix-table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 10px 0 20px 0;
+    font-size: 14px;
+}
+.matrix-table th,
+.matrix-table td {
+    border: 1px solid #ddd;
+    padding: 6px 10px;
+    text-align: center;
+}
+.matrix-table th {
+    background-color: #3498db;
+    color: white;
+}
+.matrix-table tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+.matrix-table tr:hover {
+    background-color: #f1f1f1;
+}
+.btn-small {
+    padding: 4px 12px;
+    font-size: 12px;
+}
